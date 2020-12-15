@@ -75,7 +75,7 @@ def lowfieldgen(in_param, seed=None):
     # |.BW_high(kHz): Readout bandwidth of kspace data
     # |.BW_low(kHz): Readout bandwidth of simulated low field data
     # |.theta(degree): flip angle
-    # |.n_cov: noise covariance matrix[Ncoil Ncoil],
+    # |.n_cov: noise covariance matrix [Ncoil, Ncoil],
     # | if a single number is entered, a diagonal matrix
     # | will be used
     # | (optional):
@@ -93,8 +93,8 @@ def lowfieldgen(in_param, seed=None):
     # Python port by Zalan Fabian, December, 2020
     # University of Southern California
     # https: // mrel.usc.edu
+    # T1 & T2 Correction Table REF: Principles of MRI.D.G.Nishimura
 
-    ## T1 & T2 Correction Table REF: Principles of MRI.D.G.Nishimura
     B0_set = [0.1, 0.2, 0.3, 0.4, 0.5, 1, 1.5, 3]
 
     tissue_type = ['muscle',
@@ -132,13 +132,21 @@ def lowfieldgen(in_param, seed=None):
         Nt = 1
         Ncoil = 1
 
-    ## Passing parameters
-
+    # ------------------------------------------------------------
+    # PASSING PARAMETERS
+    # ------------------------------------------------------------
+    
     # Covariance matrix
-    if isinstance(in_param.n_cov, (list, tuple, np.ndarray)):
-        n_cov = in_param.n_cov
+    if isinstance(in_param.n_cov, (list, tuple)):
+        n_cov = np.array(in_param.n_cov)
+    elif isinstance(in_param.n_cov, np.ndarray):
+        assert len(in_param.n_cov.shape) < 3
+        if len(in_param.n_cov.shape) == 2:
+            n_cov = in_param.n_cov
+        else:
+            n_cov = in_param.n_cov * np.eye(Ncoil)
     else:
-        n_cov = in_param.n_cov * np.eye(Ncoil)
+        n_cov = float(in_param.n_cov) * np.eye(Ncoil)
 
     # T1 at high field
     if in_param.T1_high is None:
@@ -192,8 +200,9 @@ def lowfieldgen(in_param, seed=None):
     BW_high = in_param.BW_high
     BW_low = in_param.BW_low
 
-    ## Signal scaling
-
+    # ------------------------------------------------------------
+    # SIGNAL SCALING
+    # ------------------------------------------------------------
     E1_h = np.exp(-TR_high / T1_high)
     E1_l = np.exp(-TR_low / T1_low)
     E2_h = np.exp(-TE_high / T2)
@@ -216,10 +225,10 @@ def lowfieldgen(in_param, seed=None):
     elif in_param.sequence == 'InversionRecovery':
         raise ValueError('InversionRecovery not supported')
 
-    ## Noise scaling
-
+    # ------------------------------------------------------------
+    # NOISE SCALING
+    # ------------------------------------------------------------
     b = BW_low / BW_high
-
     scaleN = np.sqrt(a ** 2 * b - (a ** 4) * (fx ** 2))
     vals, vecs = np.linalg.eig(n_cov)
     d = np.diag(vals)
@@ -231,6 +240,8 @@ def lowfieldgen(in_param, seed=None):
     noise = np.transpose(noise, (1, 0))
     noise = np.reshape(noise, data_dims)
 
-    ## Output
+    # ------------------------------------------------------------
+    # OUTPUT
+    # ------------------------------------------------------------
     k_low = in_param.k_high * scaleS + noise
     return k_low

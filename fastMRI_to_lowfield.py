@@ -1,8 +1,7 @@
 # This code adds noise to the fastMRI dataset to simulate low field acquisition
-# Only works for single-coil knee data
+# Only works for knee data
 
-# TODO: - multi-coil support
-#       - read BW from ISMRM header somehow
+# TODO: - read BW from ISMRM header somehow
 #       - brain data support
 
 from lowfield import InParam, lowfieldgen
@@ -14,16 +13,23 @@ import xmltodict
 from pathlib import Path
 from argparse import ArgumentParser
 
-def estimate_noise_cov(kspace, width=10):
-    s, h, w = kspace.shape
-    x = np.stack([ifft2_np(kspace[i, ...]) for i in range(s)], axis=0)
-    x_re = np.real(x)
-    x_im = np.imag(x)
-    bg_re = np.concatenate((x_re[:, :, :width], x_re[:, :, -width:]), axis=-1)
-    bg_im = np.concatenate((x_im[:, :, :width], x_im[:, :, -width:]), axis=-1)
-    bg_all = np.concatenate((bg_re, bg_im), axis=-1)
-    noise_std = np.std(bg_all)
-    return noise_std**2
+
+def estimate_noise_cov(kspace, bg_width=10):
+    assert 3 <= len(kspace.shape) <= 4
+    if len(kspace.shape) == 3:  # Single-coil: insert singleton dim
+        kspace = kspace[:, None, :, :]
+    s, c, h, w = kspace.shape
+    noise_mx = np.zeros(shape=(c, h * bg_width * 2 * 2 * s))  # Allocate matrix for noise samples
+    for ch in range(c):
+        x = np.stack([ifft2_np(kspace[i, ch, ...]) for i in range(s)], axis=0)
+        x_re = np.real(x)
+        x_im = np.imag(x)
+        bg_re = np.concatenate((x_re[:, :, :bg_width], x_re[:, :, -bg_width:]), axis=-1)
+        bg_im = np.concatenate((x_im[:, :, :bg_width], x_im[:, :, -bg_width:]), axis=-1)
+        bg_all = np.concatenate((bg_re, bg_im), axis=-1)
+        noise_mx[ch, :] = bg_all.reshape(-1)
+    noise_cov = np.cov(noise_mx)
+    return noise_cov
 
 
 def main(args):
@@ -34,7 +40,8 @@ def main(args):
         print('\rConverting ', i+1, '/', len(in_files), end='')
         # Open next volume
         in_data = h5py.File(in_file, 'r')
-        k_high = in_data['kspace']
+        k_high = in_data['kspace'][()]
+        coil_type = 'singlecoil' if len(k_high.shape) == 3 else 'multicoil'
 
         # Read parameters from ISMRM header
         xml_header = in_data['ismrmrd_header'][()].decode('UTF-8')
@@ -47,10 +54,13 @@ def main(args):
         tissue = 'muscle' if args.dataset_type == 'knee' else 'gray matter'  # No support for brain data yet!
 
         # Estimate noise covariance
-        n_cov = estimate_noise_cov(k_high, width=10)
+        n_cov = estimate_noise_cov(k_high, bg_width=10)
 
         # Set up input parameters for low field sim
-        k_high = np.transpose(k_high, axes=[1, 2, 0])  # Need to be in order [Nkx Nky Nkz] for low field sim
+        if coil_type == 'singlecoil':  # Single-coil needs to be in order [Nkx, Nky, Nkz]
+            k_high = np.transpose(k_high, axes=[1, 2, 0])
+        else:                          # Multi-coil needs to be in order [Nkx, Nky, Nkz, Ncoil]
+            k_high = np.transpose(k_high, axes=[2, 3, 0, 1])
         input_params = InParam(k_high=k_high,
                               B_high=B_high,
                               B_low=args.B_low,
@@ -71,7 +81,10 @@ def main(args):
 
         # Get simulated low field data
         k_low = lowfieldgen(input_params, seed=None)  # Set seed here to make generated dataset deterministic
-        k_low = np.transpose(k_low, axes=[2, 0, 1])  # Permute axes back to original
+        if coil_type == 'singlecoil':                 # Permute axes back to original
+            k_low = np.transpose(k_low, axes=[2, 0, 1])
+        else:
+            k_low = np.transpose(k_low, axes=[2, 3, 0, 1])
 
         # Create output file and write low field data
         in_data.close()
