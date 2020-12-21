@@ -5,7 +5,7 @@
 #       - brain data support
 
 from lowfield import InParam, lowfieldgen
-from utils import ifft2_np
+from utils import ifft2_np, kspace_to_target_vol
 import numpy as np
 import h5py
 import shutil
@@ -80,7 +80,7 @@ def main(args):
                             )
 
         # Get simulated low field data
-        k_low = lowfieldgen(input_params, seed=None)  # Set seed here to make generated dataset deterministic
+        k_low = lowfieldgen(input_params, seed=None, only_noise=args.only_noise)  # Set seed here to make generated dataset deterministic
         if coil_type == 'singlecoil':                 # Permute axes back to original
             k_low = np.transpose(k_low, axes=[2, 0, 1])
         else:
@@ -93,6 +93,11 @@ def main(args):
         out_data = h5py.File(out_file, 'r+')
         kspace = out_data['kspace']
         kspace[...] = k_low
+        if coil_type == 'singlecoil':
+            noisy_target_name = 'reconstruction_esc_noisy'
+        else:
+            noisy_target_name = 'reconstruction_rss_noisy'
+        out_data.create_dataset(noisy_target_name, data=kspace_to_target_vol(k_low))
         out_data.close()
     print('\nDone.')
 
@@ -110,6 +115,8 @@ def build_args():
                         help='Simulated low field strength [T]. Must be from [0.1, 0.2, 0.3, 0.4, 0.5, 1, 1.5, 3].')
     parser.add_argument("--dataset-type", type=str, default='knee',
                         help='Choose fastMRI dataset from ["knee", "brain"] . Currently only supports knee.')
+    parser.add_argument('--only-noise', default=False, action='store_true',
+                        help='Only simulate additive noise, no signal scaling will be performed.')
     args = parser.parse_args()
     return args
 
