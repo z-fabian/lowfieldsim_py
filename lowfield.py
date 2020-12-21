@@ -203,29 +203,29 @@ def lowfieldgen(in_param, seed=None, only_noise=False):
     # ------------------------------------------------------------
     # SIGNAL SCALING
     # ------------------------------------------------------------
-    if not only_noise:
-        E1_h = np.exp(-TR_high / T1_high)
-        E1_l = np.exp(-TR_low / T1_low)
-        E2_h = np.exp(-TE_high / T2)
-        E2_l = np.exp(-TE_low / T2)
+    E1_h = np.exp(-TR_high / T1_high)
+    E1_l = np.exp(-TR_low / T1_low)
+    E2_h = np.exp(-TE_high / T2)
+    E2_l = np.exp(-TE_low / T2)
 
-        a = in_param.B_low / in_param.B_high
+    a = in_param.B_low / in_param.B_high
 
-        if in_param.sequence == 'SpinEcho':
-            fx = ((1 - E1_l) / (1 - E1_l * np.cos(theta))) \
-            / ((1 - E1_h) / (1 - E1_h * np.cos(theta))) \
-            *(E2_l / E2_h)
-            scaleS = fx * (a ** 2)
-        elif in_param.sequence == 'GradientEcho':
-            fx = ((1 - E1_l) / (1 - E1_l * np.cos(theta))) \
-            / ((1 - E1_h) / (1 - E1_h * np.cos(theta))) \
-            *(E2_l / E2_h)
-            scaleS = fx * (a ** 2)
-        elif in_param.sequence == 'bSSFP':
-            raise ValueError('bSSFP not supported')
-        elif in_param.sequence == 'InversionRecovery':
-            raise ValueError('InversionRecovery not supported')
-    else:
+    if in_param.sequence == 'SpinEcho':
+        fx = ((1 - E1_l) / (1 - E1_l * np.cos(theta))) \
+        / ((1 - E1_h) / (1 - E1_h * np.cos(theta))) \
+        *(E2_l / E2_h)
+        scaleS = fx * (a ** 2)
+    elif in_param.sequence == 'GradientEcho':
+        fx = ((1 - E1_l) / (1 - E1_l * np.cos(theta))) \
+        / ((1 - E1_h) / (1 - E1_h * np.cos(theta))) \
+        *(E2_l / E2_h)
+        scaleS = fx * (a ** 2)
+    elif in_param.sequence == 'bSSFP':
+        raise ValueError('bSSFP not supported')
+    elif in_param.sequence == 'InversionRecovery':
+        raise ValueError('InversionRecovery not supported')
+
+    if only_noise:
         scaleS = 1.0
 
     # ------------------------------------------------------------
