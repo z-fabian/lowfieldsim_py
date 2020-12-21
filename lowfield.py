@@ -37,7 +37,7 @@ class InParam:
         self.T2 = T2
 
 
-def lowfieldgen(in_param, seed=None):
+def lowfieldgen(in_param, seed=None, only_noise=False):
     # LOWFIELDGEN_TEST simulates low field noise
     # | [k_low] = lowfieldgen_test(in_param)
     # |
@@ -46,8 +46,7 @@ def lowfieldgen(in_param, seed=None):
     # | [Nkx, Nky, Nkz, Nt, Ncoil]
     # |
     # | Input:
-    # | inparam: input parameter structure, details below:
-    # |
+    # | in_param: input parameter structure, details below:
     # |.k_high: kspace data aquired at high field in format
     # | [Nkx Nky Nkz Nt Ncoil]
     # |.B_high(T): B0 field strength at which data was acquired
@@ -87,7 +86,8 @@ def lowfieldgen(in_param, seed=None):
     # | (0.1, 0.2, 0.3, 0.4, 0.5, 1, 1.5, 3)
     # |.T2(s): required only if T2 values if tissue type is
     # | 'other'
-    #
+    # | seed: (int) random seed to generate noise. If None, a new seed will be generated.
+    # | only_noise: (bool) if True, no signal scaling is performed, only additive noise is simulated.
     # (c) written by Ziyue Wu, Feburary 2014.
     # (c) modified by Weiyi Chen, August 2014.
     # Python port by Zalan Fabian, December, 2020
@@ -203,27 +203,30 @@ def lowfieldgen(in_param, seed=None):
     # ------------------------------------------------------------
     # SIGNAL SCALING
     # ------------------------------------------------------------
-    E1_h = np.exp(-TR_high / T1_high)
-    E1_l = np.exp(-TR_low / T1_low)
-    E2_h = np.exp(-TE_high / T2)
-    E2_l = np.exp(-TE_low / T2)
+    if not only_noise:
+        E1_h = np.exp(-TR_high / T1_high)
+        E1_l = np.exp(-TR_low / T1_low)
+        E2_h = np.exp(-TE_high / T2)
+        E2_l = np.exp(-TE_low / T2)
 
-    a = in_param.B_low / in_param.B_high
+        a = in_param.B_low / in_param.B_high
 
-    if in_param.sequence == 'SpinEcho':
-        fx = ((1 - E1_l) / (1 - E1_l * np.cos(theta))) \
-        / ((1 - E1_h) / (1 - E1_h * np.cos(theta))) \
-        *(E2_l / E2_h)
-        scaleS = fx * (a ** 2)
-    elif in_param.sequence == 'GradientEcho':
-        fx = ((1 - E1_l) / (1 - E1_l * np.cos(theta))) \
-        / ((1 - E1_h) / (1 - E1_h * np.cos(theta))) \
-        *(E2_l / E2_h)
-        scaleS = fx * (a ** 2)
-    elif in_param.sequence == 'bSSFP':
-        raise ValueError('bSSFP not supported')
-    elif in_param.sequence == 'InversionRecovery':
-        raise ValueError('InversionRecovery not supported')
+        if in_param.sequence == 'SpinEcho':
+            fx = ((1 - E1_l) / (1 - E1_l * np.cos(theta))) \
+            / ((1 - E1_h) / (1 - E1_h * np.cos(theta))) \
+            *(E2_l / E2_h)
+            scaleS = fx * (a ** 2)
+        elif in_param.sequence == 'GradientEcho':
+            fx = ((1 - E1_l) / (1 - E1_l * np.cos(theta))) \
+            / ((1 - E1_h) / (1 - E1_h * np.cos(theta))) \
+            *(E2_l / E2_h)
+            scaleS = fx * (a ** 2)
+        elif in_param.sequence == 'bSSFP':
+            raise ValueError('bSSFP not supported')
+        elif in_param.sequence == 'InversionRecovery':
+            raise ValueError('InversionRecovery not supported')
+    else:
+        scaleS = 1.0
 
     # ------------------------------------------------------------
     # NOISE SCALING
